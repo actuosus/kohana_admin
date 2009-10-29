@@ -1,0 +1,46 @@
+* html body {
+	behavior:expression(runtimeStyle.behavior = 'none', document.execCommand("BackgroundImageCache", false, true));
+}
+
+.sidebar-tree-section {
+	padding: 0;
+}
+
+.sidebar-tree-item {
+	border-top: 0;
+}
+#main, #main-panels, #main-panels .panel, #main-container {
+	width: 100%;
+}
+
+.data-grid {
+	width: 100%;
+	top: 0px;
+	bottom: 0px;
+}
+
+#main, #main-panels, #main-panels .panel, #main-container, #main-container-content .data-container, .database-view, table.data, .data-grid {
+	tblr:expression( 
+	  function (t) {
+	    var h = t.parentNode.offsetHeight || t.parentNode.parentNode.offsetHeight;
+	    var w = t.parentNode.offsetWidth || t.parentNode.parentNode.offsetWidth;
+	    var top = parseInt(t.currentStyle.top, 10);
+	    var bottom = parseInt(t.currentStyle.bottom, 10);
+	    var left = parseInt(t.currentStyle.left, 10);
+	    var right = parseInt(t.currentStyle.right, 10);
+	    if (t.h != h || t.top != top || t.bottom != bottom || t.w != w || t.left != left || t.right != right) { 
+	      if (h >= 0 && top >= 0 && bottom >= 0) { 
+	        t.h = h; t.top = top; t.bottom = bottom; t.style.height = h - (top + bottom) > 0 ? h - (top + bottom) : 0;
+	      }
+	      if (w >= 0 && left >= 0 && right >= 0) { 
+	        t.w = w; t.left = left; t.right = right; t.style.width = w - (left + right) > 0 ? w - (left + right) : 0;
+	      }
+	    }
+	  }(this)
+	);
+/*	height: expression(document.body.offsetHeight - this.offsetHeight);*/
+}
+
+#main-container-content {
+	width:100%;
+}
