@@ -3,12 +3,10 @@
 /**
  * Admin Controller class
  *
- * @package admin
+ * @package Admin
  * @author Arthur Chafonov
  * @version 0.1.9
  */
-
-
 
 class Admin_Controller extends Template_Controller {
 	
@@ -287,7 +285,11 @@ class Admin_Controller extends Template_Controller {
 		{
 			if ( $field_name == 'id' )
 				continue;
-			if ( array_key_exists('binary', $item->table_columns[$field_name]))
+			if (array_key_exists('type', $item->table_columns[$field_name]) AND
+				(
+					$item->table_columns[$field_name]['type'] == 'boolean'
+						OR $item->table_columns[$field_name]['type'] == 'binary'
+				))
 			{
 				if ( array_key_exists($field_name, $post) )
 				{
@@ -297,11 +299,6 @@ class Admin_Controller extends Template_Controller {
 				{
 					$item->$field_name = FALSE;
 				}
-			}
-			else if (property_exists($item, 'admin') && array_key_exists($field_name, $item->admin) && $item->admin[$field_name]['type'] == 'file')
-			{
-				array_push($file_field_names, $field_name);
-				continue;
 			}
 			else
 			{
@@ -322,12 +319,15 @@ class Admin_Controller extends Template_Controller {
 		$post = $this->input->post();
 		$item = ORM::factory($model_name, $id);
 		
-		$file_field_names = array();
 		foreach( $item->as_array() as $field_name => $field_value )
 		{
 			if ( $field_name == 'id' )
 				continue;
-			if ( array_key_exists('binary', $item->table_columns[$field_name]))
+			if (array_key_exists('type', $item->table_columns[$field_name]) AND
+				(
+					$item->table_columns[$field_name]['type'] == 'boolean'
+						OR $item->table_columns[$field_name]['type'] == 'binary'
+				))
 			{
 				if ( array_key_exists($field_name, $post) )
 				{
@@ -337,11 +337,6 @@ class Admin_Controller extends Template_Controller {
 				{
 					$item->$field_name = FALSE;
 				}
-			}
-			else if (property_exists($item, 'admin') && array_key_exists($field_name, $item->admin) && $item->admin[$field_name]['type'] == 'file')
-			{
-				array_push($file_field_names, $field_name);
-				continue;
 			}
 			else
 			{
@@ -353,8 +348,8 @@ class Admin_Controller extends Template_Controller {
 		}
 		
 		$this->save_files($item);
-		$this->save_related($item, $post);
 		$item->save();
+		$this->save_related($item, $post);
 	}
 	
 	public function save_related($item, $post)

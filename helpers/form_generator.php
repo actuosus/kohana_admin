@@ -42,7 +42,7 @@ class form_generator_Core
 		return (array) $output;
 	}
 	
-	public static function row($item)
+	public static function rows($item)
 	{
 		// print Kohana::debug($item);
 		$output = '';
@@ -214,14 +214,14 @@ class form_generator_Core
 		return $output;
 	}
 	
-	public static function related_row($model_name, $related)
+	public static function related_rows($model_name, $related)
 	{
 		$item = ORM::factory(inflector::singular($model_name));
 		$label = NULL;
 		if (property_exists('verbose_plural', $item)) {
 			$label = $item->verbose_plural;
 		}
-		$output = '<li class="row">';
+		$output = '<li class="row related many">';
 		$output .= form::label($item->object_plural, self::label($item, $item->object_name, $label));
 		
 		$selection = array();
@@ -251,7 +251,7 @@ class form_generator_Core
 		if (property_exists('verbose_name', $item)) {
 			$label = $item->verbose_name;
 		}
-		$output = '<li class="row">';
+		$output = '<li class="row related one">';
 		$output .= form::label($item->object_name, self::label($item, $item->object_name, $label));
 		
 		$selection = array();
@@ -277,7 +277,7 @@ class form_generator_Core
 				$selection[$object->id] = (string) $object;
 			}
 		}
-		$output .= form::dropdown(array('name' => $item->object_name.'[]', 'size' => 4), $selection, $related->{$item->object_name}->id);
+		$output .= form::dropdown(array('name' => $item->object_name.'[]', 'size' => 4), $selection, $related->{$item->object_name}->id, 'id="'.$item->object_plural.'"');
 		
 		$output .= '</li>';
 		
