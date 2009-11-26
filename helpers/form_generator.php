@@ -86,8 +86,10 @@ class form_generator_Core
 					else {
 						if (property_exists($item, 'admin') && array_key_exists($column_name, $item->admin) && $item->admin[$column_name]['type'] === 'file')
 						{
-							$file_name = basename($column_value);
 							$attributes = array('name' => $column_name);
+							$output .= form::upload($attributes, $column_value);
+							$file_name = basename($column_value);
+							
 							$upload_to = '/';
 							if ( array_key_exists('upload_to', $item->admin[$column_name]) )
 							{
@@ -101,13 +103,19 @@ class form_generator_Core
 							// print Kohana::debug($link);
 							if ($file_type == 'image')
 							{
-								$output .= html::anchor($link, html::image(array('src'=>$link, 'width'=>200)), array('target'=>'_blank'));
+								$image_source = $link;
+								$file_data = pathinfo($full_file_path);
+								$thumb = $file_data['dirname'].'/'.$file_data['filename'].'_small.'.$file_data['extension'];
+								if (file_exists($thumb)) {
+									$image_source = '/'.Kohana::config('upload.relative_path').$upload_to.$file_data['filename'].'_small.'.$file_data['extension'];
+								}
+								
+								$output .= '<div class="picture-container">'. html::anchor($link, html::image(array('src'=>$image_source, 'width'=>100)), array('target'=>'_blank')). '</div>';
 							}
 							else
 							{
 								$output .= html::anchor($link, $file_name, array('target'=>'_blank'));
 							}
-							$output .= form::upload($attributes, $column_value);
 						}
 						else
 						{

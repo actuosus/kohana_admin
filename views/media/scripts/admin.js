@@ -1,7 +1,8 @@
 /*globals,
   SWFUpload,
   SWFObject,
-  uploader
+  uploader,
+  WavePanel
 */
 
 if (typeof window.console == 'undefined') {
@@ -19,19 +20,19 @@ var $A;
 
 $A = Array.from = function(iterable)
 {
-	if (!iterable) {
-		return [];
-	}
+  if (!iterable) {
+    return [];
+  }
 
-	if (iterable.toArray) {
-		return iterable.toArray();
-	} else {
-		var results = [];
-		for (var i = 0, length = iterable.length; i < length; i++) {
-			results.push(iterable[i]);
-		}
-		return results;
-	}
+  if (iterable.toArray) {
+    return iterable.toArray();
+  } else {
+    var results = [];
+    for (var i = 0, length = iterable.length; i < length; i++) {
+      results.push(iterable[i]);
+    }
+    return results;
+  }
 };
 
 $.extend( Function.prototype, {
@@ -88,8 +89,11 @@ var Admin = {
   setCurrentTreeItem: function(itemElement) {
     this.currentTreeItem = null;
     this.currentTreeItem = new Admin.Item(this, itemElement);
-    window.location.hash = '#' + this.currentTreeItem.model;
-    this.currentTreeItem.select();
+    console.log(this.currentTreeItem);
+    if (this.currentTreeItem && this.currentTreeItem.url) {
+      window.location.hash = '#' + this.currentTreeItem.model;
+      this.currentTreeItem.select();
+    }
   },
   
   showLastView: function() {
@@ -150,6 +154,54 @@ var Admin = {
         return false;
       }
     );
+    $('.sidebar-tree-item .wavvy').click(function(){
+      this.addWave();
+    }.bind(this));
+  },
+
+  addWave: function() {
+    if (!window.WavePanel) {
+      var waveAPIscript = document.createElement('script');
+      waveAPIscript.type = 'text/javascript';
+      waveAPIscript.src = 'http://wave-api.appspot.com/public/embed.js';
+      var waveGadgets = document.createElement('script');
+      waveGadgets.type = 'text/javascript';
+      waveGadgets.src = 'https://wave.google.com/gadgets/js/core:rpc?debug=1&c=1';
+      var head = document.getElementsByTagName('head')[0];
+      head.appendChild(waveGadgets);
+      head.appendChild(waveAPIscript);
+      
+      waveGadgets.addEventListener('load', function() {
+        waveAPIscript.addEventListener('load', function() {
+          this.enableWave();
+        }.bind(this));
+      }.bind(this));
+    }
+  },
+  
+  enableWave: function() {
+    console.log('Enabling wave.');
+    var waveUI = new WavePanel.UIConfig();
+    // waveUI.setBgcolor('white');
+    waveUI.setFont('Lucida Grande');
+    waveUI.setFontSize(10);
+    waveUI.setHeaderEnabled(true);
+    waveUI.setToolbarEnabled(true);
+    
+    var waveURL = 'https://wave.google.com/wave/';
+    var wavePanel = new WavePanel(waveURL);
+    
+    if (waveUI) {
+      wavePanel.setUIConfigObject(waveUI);
+    }
+    
+    var waveContainer = $('#main-container-content').get(0);
+    $(waveContainer).empty();
+    var search = 'tag:zsystem';
+    wavePanel.loadSearch(search);
+    wavePanel.init(waveContainer);
+    wavePanel.setToolbarVisible(true);
+    window.wavePanel = wavePanel;
   }
 };
 
@@ -157,6 +209,9 @@ Admin.Item = function(parent, itemElement) {
   this.parent = parent;
   this.element = itemElement;
   this.url = $('a', this.element).attr('href');
+  if (!this.url) {
+    return;
+  }
   this.model = this.url.split('/')[2];
   return this;
 };
@@ -199,6 +254,36 @@ Admin.Item.prototype = {
                     '<div class="toolbar-label">Много файлов</div>'+
                   '</button>');
           }
+          $('#main-container-content').unbind('dragenter').bind('dragenter', function(event){
+            console.log('Started drag');
+            event.stopPropagation();
+            event.preventDefault();
+            
+          });
+          $('#main-container-content').unbind('dragover').bind('dragover', function(event){
+            event.stopPropagation();
+            event.preventDefault();
+          });
+          $('#main-container-content').unbind('drop').bind('drop',
+            function(event){
+              event.stopPropagation();
+              event.preventDefault();
+              var model = this.model;
+              var dt = event.originalEvent.dataTransfer;
+              var files = dt.files;
+              var url = '/admin/'+model+'/single/';
+              console.log(files);
+              var handler = function(xhr) {
+                $('#main-container-content').html(xhr.responseText);
+                Admin.currentTreeItem.select();
+              };
+              for (var idx = 0; idx < files.length; idx++) {
+                var file = files[idx];
+                this.uploadFile(file, url, handler);
+              }
+              
+            }.bind(this)
+          );
           
           if ($.browser.safari) {
             if (parseFloat(jQuery.browser.version) > 531) {
@@ -219,23 +304,10 @@ Admin.Item.prototype = {
                   };
                   window.onbeforeunload = test;
                 $('#multi-upload').trigger('click');
-                $('#multi-upload').change(function(){
-                  this.setStatus('Uploading...');
-                  $('#multi-upload-form').ajaxSubmit({
-                    success: function(data){
-                      $('#main-container-content').html(data);
-                      $('#main-container-content .gallery-view').selectable({
-                        filter: '.item',
-                        helperStyles: {
-                          border: '1px solid rgba(255,255,255, 0.5)',
-                          background: 'rgba(0,0,0,0.25)'
-                        }
-                      });
-                      window.onbeforeunload = null;
-                    }
-                  });
-                  $('#multi-upload-form').remove();
-                }.bind(this)
+                $('#multi-upload').change(
+                  function(){
+                    this.upload();
+                  }.bind(this)
                 );
               }.bind(this)
               );
@@ -246,7 +318,7 @@ Admin.Item.prototype = {
             $(document.body).append('<form id="multi-upload-form" action="/admin/'+model+'/multiple/" method="POST" enctype="multipart/form-data" style="position: absolute; left: -2000px; top: -2000px;">'+
               '<div id="uploader-movie"></div>'+
             '</form>');
-            
+
             var uploaderMovie = new SWFObject('/admin/media/files/FileUpload.swf','uploader', 0, 0,'9');
             uploaderMovie.addParam("allowscriptaccess","always");
             uploaderMovie.addParam("wmode", 'transparent');
@@ -265,7 +337,7 @@ Admin.Item.prototype = {
               width: $('#multi-upload-button').width(),
               height: $('#multi-upload-button').height()
             });
-            
+
             // $('#multi-upload-button').unbind('click').click(function(){
             //   
             //   // 
@@ -275,7 +347,7 @@ Admin.Item.prototype = {
             //   // fireCallback.
             // });
           }
-          
+
           // $('#multi-upload-button').bind('click', function(){
           //   
           // });
@@ -374,6 +446,49 @@ Admin.Item.prototype = {
         });
       }.bind(this)
     );
+  },
+  
+  upload: function() {
+    if ($.browser.safari) {
+      this.setStatus('Uploading...');
+      var uploading = function() {
+        return 'You uploading some files.';
+      };
+      window.onbeforeunload = uploading;
+      $('#multi-upload-form').ajaxSubmit({
+        success: function(data){
+          $('#main-container-content').html(data);
+          $('#main-container-content .gallery-view').selectable({
+            filter: '.item',
+            helperStyles: {
+              border: '1px solid rgba(255,255,255, 0.5)',
+              background: 'rgba(0,0,0,0.25)'
+            }
+          });
+          window.onbeforeunload = null;
+        }
+      });
+      $('#multi-upload-form').remove();
+    } else {
+      
+    }
+  },
+  
+  uploadFile: function(file, url, handler) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        handler(xhr);
+      }
+    };
+    xhr.open('post', url || '?upload=true', true);
+    xhr.setRequestHeader('If-Modified-Since', 'Mon, 26 Jul 1997 05:00:00 GMT');
+    xhr.setRequestHeader('Cache-Control', 'no-cache');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.setRequestHeader('X-File-Name', file.fileName);
+    xhr.setRequestHeader('X-File-Size', file.fileSize);
+    xhr.setRequestHeader('Content-Type', 'multipart/form-data');
+    xhr.send(file);
   },
   
   add: function() {

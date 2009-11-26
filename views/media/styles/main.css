@@ -365,3 +365,12 @@
 	float: left;
 	margin-right: 1em;
 }
+
+.row .picture-container {
+	float: left;
+	margin: 10px;
+	padding: 10px;
+	background: white;
+	-webkit-box-shadow:rgba(0,0,0, 0.5) 0px 0px 5px;
+	-moz-box-shadow:rgba(0,0,0, 0.5) 0px 0px 5px;
+}

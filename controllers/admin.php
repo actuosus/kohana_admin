@@ -49,13 +49,15 @@ class Admin_Controller extends Template_Controller {
 			$id = 0;
 		}
 		
-		
 		$model_name = inflector::singular($method);
 		
 		if ( $this->input->post('action') ) {
 			$action = $this->input->post('action');
 		}
 		
+		if ($this->input->post('perform')) {
+			$perform = $this->input->post('perform');
+		}
 		
 		if ($action == 'multiple') {
 			$this->save_multiple_from_files($model_name);
@@ -76,6 +78,44 @@ class Admin_Controller extends Template_Controller {
 			return;
 		}
 		
+		if ($action == 'single') {
+			$this->save_file_only($model_name);
+			try
+			{
+				$list_view = new View('admin/'.$method);
+			}
+			catch (Kohana_Exception $e)
+			{
+				$list_view = new View('admin/content');
+			}
+			$view = $list_view;
+			$item = ORM::factory($model_name);
+			$items = $item->find_all();
+			$view->set('item', $item);
+			$view->set('items', $items);
+			$this->template->content = $view->render(TRUE);
+			return;
+		}
+		
+		if ($action == 'action' OR !empty($perform)) {
+			$method_to_perform = $id;
+			if ($perform) {
+				$method_to_perform = $perform;
+			}
+			
+			if (empty($id) AND array_key_exists(2, $args)) {
+				$id = $args[2];
+			}
+			if ($method_to_perform AND $id) {
+				$item = ORM::factory($model_name, $id);
+				if (method_exists($item, $method_to_perform)) {
+					$post_data = $this->input->post();
+					$item->$method_to_perform($post_data);
+				}
+			}
+			return;
+		}
+		
 		if ($id){
 			$item = ORM::factory($model_name, $id);
 			try
@@ -88,7 +128,15 @@ class Admin_Controller extends Template_Controller {
 			}
 			switch($action){
 				case 'edit':
-					$view = new View('admin/form');
+					try
+					{
+						$view = new View('admin/form/'.$method);
+					}
+					catch (Kohana_Exception $e)
+					{
+						$view = new View('admin/form');
+					}
+					
 					$view->set('item', $item);
 					break;
 				case 'save':
@@ -132,7 +180,14 @@ class Admin_Controller extends Template_Controller {
 					$view->set('items', $items);
 					break;
 				case 'add':
-					$view = new View('admin/form');
+					try
+					{
+						$view = new View('admin/form/'.$method);
+					}
+					catch (Kohana_Exception $e)
+					{
+						$view = new View('admin/form');
+					}
 					$item = ORM::factory($model_name);
 					$view->set('item', $item);
 					break;
@@ -179,13 +234,13 @@ class Admin_Controller extends Template_Controller {
 		else
 		{
 			if (Auth::instance()->logged_in()){
-			    $this->template->title="No Access";
+				$this->template->title="No Access";
 				$view = new View('admin/noaccess');
-			    $this->template->content = $view->render(TRUE);
+				$this->template->content = $view->render(TRUE);
 			}else{
-			    $this->template->title="Please Login";
+				$this->template->title="Please Login";
 				$view = new View('admin/login');
-			    $this->template->content= $view->render(TRUE);
+				$this->template->content= $view->render(TRUE);
 			}
 		}
 		$form = $_POST;
@@ -213,7 +268,7 @@ class Admin_Controller extends Template_Controller {
 		
 		$fields_to_deserialize = $this->input->post();
 		
-		$models = FormHelper::deserialize($fields_to_deserialize, '/^(\w+)-(\w+)-(\d+)$/');
+		$models = form_generator::deserialize($fields_to_deserialize, '/^(\w+)-(\w+)-(\d+)$/');
 		foreach($models as $model => $ids)
 		{
 			foreach($ids as $id => $fields)
@@ -365,34 +420,61 @@ class Admin_Controller extends Template_Controller {
 		
 		// foreach($item->has_many as $related_model_name)
 		// {
-		// 	if (array_key_exists($related_model_name, $post))
-		// 	{
-		// 		
-		// 		print Kohana::debug($item->$related_model_name);
-		// 		$item->$related_model_name = $post[$related_model_name];
-		// 	}
-		// 	unset($post[$related_model_name]);
+		//	if (array_key_exists($related_model_name, $post))
+		//	{
+		//		
+		//		print Kohana::debug($item->$related_model_name);
+		//		$item->$related_model_name = $post[$related_model_name];
+		//	}
+		//	unset($post[$related_model_name]);
 		// }
 	}
 	
-	public function save_multiple_from_files($model_name)
-	{
-		// $files = Validation::factory($_FILES);
-		// print Kohana::debug($_FILES);
-		$files = $this->prepare_files_array($_FILES['files']);
-		// exit();
-		foreach($files as $file)
+	public function save_file_only($model_name) {
+		$headers = getallheaders();
+		if(
+				// basic checks
+				isset(
+					$headers['Content-Type'],
+					$headers['Content-Length'],
+					$headers['X-File-Size'],
+					$headers['X-File-Name']
+				) &&
+				$headers['Content-Type'] === 'multipart/form-data' &&
+				$headers['Content-Length'] === $headers['X-File-Size']
+			)
 		{
-			// print $file['name'];
 			$item = ORM::factory($model_name);
 			$upload_to = NULL;
+			
 			if ( array_key_exists('upload_to', $item->admin['file']) )
 			{
 				$upload_to_path = $item->admin['file']['upload_to'];
 				$upload_to = Kohana::config('upload.directory').'/'.$item->admin['file']['upload_to'];
 			}
+			else
+			{
+				$upload_to = Kohana::config('upload.directory').'/';
+			}
+			// create the object and assign property
+			$file = new stdClass;
+			$file->name = basename($headers['X-File-Name']);
+			$file->size = $headers['X-File-Size'];
+			$file->content = file_get_contents("php://input");
 			
-			$item->file = upload::save($file, NULL, $upload_to);
+			$new_file_name = time().$file->name;
+			$full_path = $upload_to.'/'.$new_file_name;
+			// if everything is ok, save the file somewhere
+			file_put_contents($full_path, $file->content);
+			
+			$item->file = $new_file_name;
+			// print Kohana::debug($item->file);
+			
+			if ( !array_key_exists('upload_to', $item->admin['file']) )
+			{
+				$upload_to = NULL;
+			}
+			
 			$file_data = pathinfo($item->file);
 			$item->title = $file_data['filename'];
 			if (!empty($upload_to_path))
@@ -401,7 +483,37 @@ class Admin_Controller extends Template_Controller {
 			}
 			$item->file = '/'.Kohana::config('upload.relative_path').'/'.$upload_to.basename($item->file);
 			$item->save();
-			// print Kohana::debug($item);
+		}
+	}
+	
+	public function save_multiple_from_files($model_name)
+	{
+		if (array_key_exists('files', $_FILES)) {
+			$files = $this->prepare_files_array($_FILES['files']);
+			foreach($files as $file)
+			{
+				$item = ORM::factory($model_name);
+				$upload_to = NULL;
+				if ( array_key_exists('upload_to', $item->admin['file']) )
+				{
+					$upload_to_path = $item->admin['file']['upload_to'];
+					$upload_to = Kohana::config('upload.directory').'/'.$item->admin['file']['upload_to'];
+				}
+				else
+				{
+					$upload_to = Kohana::config('upload.directory').'/';
+				}
+
+				$item->file = upload::save($file, NULL, $upload_to);
+				$file_data = pathinfo($item->file);
+				$item->title = $file_data['filename'];
+				if (!empty($upload_to_path))
+				{
+					$upload_to = $upload_to_path.'/';
+				}
+				$item->file = '/'.Kohana::config('upload.relative_path').'/'.$upload_to.basename($item->file);
+				$item->save();
+			}
 		}
 	}
 	
